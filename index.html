@@ -1,0 +1,1130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KidCode Blocks - Visual Programming for Kids</title>
+    <script src="https://unpkg.com/sortablejs@1.15.0/Sortable.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Comic+Neue:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        'comic': ['"Comic Neue"', 'cursive']
+                    },
+                    colors: {
+                        primary: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            500: '#0ea5e9',
+                            600: '#0284c7',
+                            700: '#0369a1'
+                        },
+                        secondary: {
+                            400: '#f87171',
+                            500: '#ef4444',
+                        }
+                    },
+                    animation: {
+                        'bounce-once': 'bounce 0.5s ease 1',
+                        'wiggle': 'wiggle 0.5s ease-in-out 1',
+                        'spin-slow': 'spin 3s linear infinite',
+                    },
+                    keyframes: {
+                        wiggle: {
+                            '0%, 100%': { transform: 'rotate(-3deg)' },
+                            '50%': { transform: 'rotate(3deg)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .block {
+            cursor: move;
+            user-select: none;
+            transition: transform 0.2s, box-shadow 0.2s;
+            position: relative;
+        }
+        .block:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .block-container {
+            min-height: 50px;
+        }
+        .ghost {
+            opacity: 0.5;
+            background: #c8ebfb !important;
+            border: 2px dashed #0ea5e9;
+        }
+        .sortable-chosen {
+            box-shadow: 0 8px 15px rgba(0, 0, 0, 0.15);
+        }
+        @keyframes run {
+            0% { transform: translateY(0); background-opacity: 1; }
+            50% { transform: translateY(-5px); background-opacity: 0.8; }
+            100% { transform: translateY(0); background-opacity: 1; }
+        }
+        .run-animation {
+            animation: run 0.5s ease;
+        }
+        .block-icon {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 1.25rem;
+        }
+        .character {
+            transition: all 0.5s ease;
+        }
+        .character-container {
+            height: 150px;
+            position: relative;
+        }
+        #canvas {
+            border: 2px solid #e5e7eb;
+            background-image: url('https://images.unsplash.com/photo-1562907550-096d3bf9b25c?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=2070&q=80');
+            background-size: cover;
+            background-position: center;
+        }
+        /* Create notches for blocks to look like they connect */
+        .block::before {
+            content: '';
+            position: absolute;
+            height: 10px;
+            width: 20px;
+            top: -10px;
+            left: 20px;
+            background: inherit;
+            border-radius: 5px 5px 0 0;
+            display: none;
+        }
+        .block-in-program {
+            margin-top: 10px;
+        }
+        .block-in-program::before {
+            display: block;
+        }
+        .category-tab {
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .category-tab.active {
+            border-bottom-width: 4px;
+        }
+        
+        /* Speech bubble */
+        .speech-bubble {
+            position: relative;
+            background: white;
+            border-radius: 10px;
+            padding: 10px;
+            max-width: 150px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .speech-bubble:after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border: 10px solid transparent;
+            border-top-color: white;
+            border-bottom: 0;
+            margin-left: -10px;
+        }
+        
+        /* Sprite selection styles */
+        .sprite-option {
+            cursor: pointer;
+            transition: transform 0.2s;
+            border: 2px solid transparent;
+        }
+        .sprite-option:hover {
+            transform: scale(1.05);
+        }
+        .sprite-option.selected {
+            border-color: #0ea5e9;
+        }
+    </style>
+</head>
+<body class="bg-blue-50 min-h-screen font-comic">
+    <!-- Header -->
+    <header class="bg-gradient-to-r from-blue-600 to-blue-500 text-white p-4 shadow-md">
+        <div class="container mx-auto flex justify-between items-center flex-wrap">
+            <div class="flex items-center space-x-2">
+                <i class="bi bi-code-square text-3xl"></i>
+                <h1 class="text-2xl md:text-3xl font-bold">KidCode Blocks</h1>
+            </div>
+            <div class="flex space-x-3 mt-2 sm:mt-0">
+                <button id="save-btn" class="bg-blue-400 hover:bg-blue-500 px-3 py-2 rounded-lg flex items-center gap-1 text-sm md:text-base transition-colors">
+                    <i class="bi bi-save"></i> Save
+                </button>
+                <button id="load-btn" class="bg-blue-400 hover:bg-blue-500 px-3 py-2 rounded-lg flex items-center gap-1 text-sm md:text-base transition-colors">
+                    <i class="bi bi-folder2-open"></i> Load
+                </button>
+                <button onclick="runProgram()" class="bg-green-500 hover:bg-green-600 px-4 py-2 rounded-lg flex items-center gap-2 text-sm md:text-base transition-colors">
+                    <i class="bi bi-play-fill"></i> Run Program
+                </button>
+                <button id="help-btn" class="bg-purple-400 hover:bg-purple-500 px-3 py-2 rounded-lg flex items-center gap-1 text-sm md:text-base transition-colors">
+                    <i class="bi bi-question-circle"></i> Help
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="container mx-auto p-4">
+        <!-- Block Categories -->
+        <div class="bg-white rounded-lg p-2 mb-4 shadow-md flex overflow-x-auto">
+            <div class="category-tab active px-4 py-2 cursor-pointer border-b-4 border-purple-500 text-purple-700 font-bold" data-category="motion">
+                Motion
+            </div>
+            <div class="category-tab px-4 py-2 cursor-pointer border-b-4 border-transparent text-gray-600 hover:text-blue-700" data-category="control">
+                Control
+            </div>
+            <div class="category-tab px-4 py-2 cursor-pointer border-b-4 border-transparent text-gray-600 hover:text-yellow-700" data-category="events">
+                Events
+            </div>
+            <div class="category-tab px-4 py-2 cursor-pointer border-b-4 border-transparent text-gray-600 hover:text-green-700" data-category="sound">
+                Sound
+            </div>
+            <div class="category-tab px-4 py-2 cursor-pointer border-b-4 border-transparent text-gray-600 hover:text-red-700" data-category="storytelling">
+                Storytelling
+            </div>
+            <div class="category-tab px-4 py-2 cursor-pointer border-b-4 border-transparent text-gray-600 hover:text-pink-700" data-category="looks">
+                Looks
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
+            <!-- Blocks Palette -->
+            <div class="lg:col-span-1 bg-white rounded-lg p-4 shadow-lg">
+                <h2 class="text-xl font-bold mb-4 flex items-center"><i class="bi bi-grid-3x3-gap-fill mr-2 text-blue-500"></i>Blocks</h2>
+                
+                <!-- Motion Blocks -->
+                <div id="blocksPalette" class="space-y-3" data-category="motion">
+                    <div class="block bg-purple-500 text-white p-3 rounded-lg" data-type="move">
+                        Move Forward 10 steps
+                        <i class="bi bi-arrow-right block-icon"></i>
+                    </div>
+                    <div class="block bg-purple-500 text-white p-3 rounded-lg" data-type="turn-right">
+                        Turn Right 90°
+                        <i class="bi bi-arrow-clockwise block-icon"></i>
+                    </div>
+                    <div class="block bg-purple-500 text-white p-3 rounded-lg" data-type="turn-left">
+                        Turn Left 90°
+                        <i class="bi bi-arrow-counterclockwise block-icon"></i>
+                    </div>
+                    <div class="block bg-purple-500 text-white p-3 rounded-lg" data-type="move-to">
+                        Move to X:0 Y:0
+                        <i class="bi bi-geo-alt block-icon"></i>
+                    </div>
+                </div>
+                
+                <!-- Control Blocks - Hidden by Default -->
+                <div id="controlBlocks" class="space-y-3 hidden" data-category="control">
+                    <div class="block bg-blue-500 text-white p-3 rounded-lg" data-type="repeat">
+                        Repeat 3 Times
+                        <i class="bi bi-arrow-repeat block-icon"></i>
+                    </div>
+                    <div class="block bg-blue-500 text-white p-3 rounded-lg" data-type="if">
+                        If Path Ahead
+                        <i class="bi bi-question-diamond block-icon"></i>
+                    </div>
+                    <div class="block bg-blue-500 text-white p-3 rounded-lg" data-type="wait">
+                        Wait 1 second
+                        <i class="bi bi-hourglass-split block-icon"></i>
+                    </div>
+                    <div class="block bg-blue-500 text-white p-3 rounded-lg" data-type="forever">
+                        Forever Loop
+                        <i class="bi bi-infinity block-icon"></i>
+                    </div>
+                </div>
+                
+                <!-- Events Blocks - Hidden by Default -->
+                <div id="eventsBlocks" class="space-y-3 hidden" data-category="events">
+                    <div class="block bg-yellow-500 text-white p-3 rounded-lg" data-type="when-start">
+                        When Program Starts
+                        <i class="bi bi-flag-fill block-icon"></i>
+                    </div>
+                    <div class="block bg-yellow-500 text-white p-3 rounded-lg" data-type="when-click">
+                        When Character Clicked
+                        <i class="bi bi-mouse block-icon"></i>
+                    </div>
+                    <div class="block bg-yellow-500 text-white p-3 rounded-lg" data-type="when-key">
+                        When Space Key Pressed
+                        <i class="bi bi-keyboard block-icon"></i>
+                    </div>
+                </div>
+                
+                <!-- Sound Blocks - Hidden by Default -->
+                <div id="soundBlocks" class="space-y-3 hidden" data-category="sound">
+                    <div class="block bg-green-500 text-white p-3 rounded-lg" data-type="play-sound">
+                        Play Sound "Beep"
+                        <i class="bi bi-volume-up block-icon"></i>
+                    </div>
+                    <div class="block bg-green-500 text-white p-3 rounded-lg" data-type="play-note">
+                        Play Note 60 for 0.5s
+                        <i class="bi bi-music-note-beamed block-icon"></i>
+                    </div>
+                    <div class="block bg-green-500 text-white p-3 rounded-lg" data-type="stop-sounds">
+                        Stop All Sounds
+                        <i class="bi bi-volume-mute block-icon"></i>
+                    </div>
+                </div>
+                
+                <!-- Storytelling Blocks - Hidden by Default -->
+                <div id="storytellingBlocks" class="space-y-3 hidden" data-category="storytelling">
+                    <div class="block bg-red-500 text-white p-3 rounded-lg" data-type="say">
+                        Say "Hello!" for 2s
+                        <i class="bi bi-chat-dots block-icon"></i>
+                    </div>
+                    <div class="block bg-red-500 text-white p-3 rounded-lg" data-type="think">
+                        Think "Hmm..." for 2s
+                        <i class="bi bi-cloud block-icon"></i>
+                    </div>
+                    <div class="block bg-red-500 text-white p-3 rounded-lg" data-type="change-bg">
+                        Change Background to "Forest"
+                        <i class="bi bi-image block-icon"></i>
+                    </div>
+                </div>
+                
+                <!-- Looks Blocks - Hidden by Default -->
+                <div id="looksBlocks" class="space-y-3 hidden" data-category="looks">
+                    <div class="block bg-pink-500 text-white p-3 rounded-lg" data-type="hide">
+                        Hide Character
+                        <i class="bi bi-eye-slash block-icon"></i>
+                    </div>
+                    <div class="block bg-pink-500 text-white p-3 rounded-lg" data-type="show">
+                        Show Character
+                        <i class="bi bi-eye block-icon"></i>
+                    </div>
+                    <div class="block bg-pink-500 text-white p-3 rounded-lg" data-type="change-size">
+                        Change Size by 10
+                        <i class="bi bi-arrows-angle-expand block-icon"></i>
+                    </div>
+                    <div class="block bg-pink-500 text-white p-3 rounded-lg" data-type="change-color">
+                        Change Color Effect
+                        <i class="bi bi-palette block-icon"></i>
+                    </div>
+                </div>
+                
+                <!-- Character Selection -->
+                <div class="mt-6">
+                    <h3 class="font-bold mb-2 flex items-center">
+                        <i class="bi bi-person-badge mr-2 text-blue-500"></i>Choose Character
+                    </h3>
+                    <div class="grid grid-cols-3 gap-2">
+                        <img src="https://images.unsplash.com/photo-1589254065878-42c9da997008?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=387&q=80" 
+                            class="sprite-option selected w-full h-16 object-contain rounded-lg" 
+                            data-sprite="robot" alt="Robot character">
+                        <img src="https://images.unsplash.com/photo-1560806925-c82f126d84b8?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=387&q=80" 
+                            class="sprite-option w-full h-16 object-contain rounded-lg" 
+                            data-sprite="cat" alt="Cat character">
+                        <img src="https://images.unsplash.com/photo-1580502738358-32f11585198a?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=387&q=80" 
+                            class="sprite-option w-full h-16 object-contain rounded-lg" 
+                            data-sprite="astronaut" alt="Astronaut character">
+                    </div>
+                </div>
+                
+                <!-- Background Selection -->
+                <div class="mt-4">
+                    <h3 class="font-bold mb-2 flex items-center">
+                        <i class="bi bi-image mr-2 text-blue-500"></i>Choose Background
+                    </h3>
+                    <div class="grid grid-cols-3 gap-2">
+                        <div class="bg-option selected rounded-lg overflow-hidden h-12" data-bg="space">
+                            <img src="https://images.unsplash.com/photo-1562907550-096d3bf9b25c?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=2070&q=80" 
+                                class="w-full h-full object-cover" alt="Space background">
+                        </div>
+                        <div class="bg-option rounded-lg overflow-hidden h-12" data-bg="forest">
+                            <img src="https://images.unsplash.com/photo-1448375240586-882707db888b?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=1170&q=80" 
+                                class="w-full h-full object-cover" alt="Forest background">
+                        </div>
+                        <div class="bg-option rounded-lg overflow-hidden h-12" data-bg="ocean">
+                            <img src="https://images.unsplash.com/photo-1518837695005-2083093ee35b?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=1170&q=80" 
+                                class="w-full h-full object-cover" alt="Ocean background">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Programming and Visualization Area -->
+            <div class="lg:col-span-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Programming Area -->
+                    <div class="bg-white rounded-lg p-4 shadow-lg">
+                        <h2 class="text-xl font-bold mb-4 flex items-center"><i class="bi bi-code-slash mr-2 text-blue-500"></i>Your Program</h2>
+                        <div id="programArea" class="block-container min-h-[400px] border-2 border-dashed border-gray-300 rounded-lg p-4">
+                            <!-- Blocks will be dropped here -->
+                        </div>
+                        <div class="flex justify-end mt-3">
+                            <button onclick="clearProgram()" class="bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded-lg flex items-center gap-1 text-sm transition-colors">
+                                <i class="bi bi-trash"></i> Clear
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Visualization Area -->
+                    <div class="bg-white rounded-lg p-4 shadow-lg">
+                        <h2 class="text-xl font-bold mb-4 flex items-center"><i class="bi bi-display mr-2 text-blue-500"></i>Preview</h2>
+                        <div id="canvas" class="w-full h-64 rounded-lg relative overflow-hidden">
+                            <div class="character-container">
+                                <img id="character" src="https://images.unsplash.com/photo-1589254065878-42c9da997008?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=387&q=80" class="character h-16 absolute" style="left: 50%; top: 50%; transform: translate(-50%, -50%) rotate(0deg);" alt="Character">
+                                <div id="speech-bubble" class="speech-bubble absolute hidden" style="top: 10%; left: 50%; transform: translateX(-50%);">
+                                    <div class="text-sm font-bold"></div>
+                                </div>
+                                <div id="thought-bubble" class="speech-bubble absolute hidden" style="top: 10%; left: 50%; transform: translateX(-50%);">
+                                    <div class="text-sm font-bold"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Output Console -->
+                        <div class="mt-4">
+                            <h3 class="font-bold flex items-center"><i class="bi bi-terminal mr-2 text-blue-500"></i>Output Console</h3>
+                            <div class="bg-gray-800 text-green-400 p-3 rounded-lg h-28 overflow-auto">
+                                <div id="output" class="font-mono text-sm"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Help Modal -->
+    <div id="helpModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-lg p-6 max-w-lg w-full">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold">How to Use KidCode Blocks</h2>
+                <button id="closeHelp" class="text-gray-500 hover:text-gray-700">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+            <div class="space-y-3">
+                <p>1. <b>Drag blocks</b> from the left panel into your program area</p>
+                <p>2. <b>Arrange blocks</b> in the order you want them to run</p>
+                <p>3. <b>Click "Run Program"</b> to see your code in action</p>
+                <p>4. <b>Save your work</b> to come back to it later</p>
+                <p>5. <b>Choose characters and backgrounds</b> to create your story</p>
+                <p>6. <b>Explore different categories</b> of blocks for more options</p>
+            </div>
+            <div class="mt-6 bg-blue-50 p-3 rounded-lg">
+                <h3 class="font-bold text-blue-700">Block Categories:</h3>
+                <ul class="list-disc pl-5 space-y-1 mt-2">
+                    <li><span class="text-purple-700 font-bold">Motion:</span> Move your character around</li>
+                    <li><span class="text-blue-700 font-bold">Control:</span> Create loops and conditions</li>
+                    <li><span class="text-yellow-700 font-bold">Events:</span> Start your program when something happens</li>
+                    <li><span class="text-green-700 font-bold">Sound:</span> Add music and sound effects</li>
+                    <li><span class="text-red-700 font-bold">Storytelling:</span> Make characters speak and change scenes</li>
+                    <li><span class="text-pink-700 font-bold">Looks:</span> Change the appearance of your character</li>
+                </ul>
+            </div>
+            <div class="mt-4 text-center">
+                <button id="gotIt" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg">
+                    Got it!
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize Sortable for block palette categories
+        document.querySelectorAll("[id$='Blocks'], #blocksPalette").forEach(container => {
+            new Sortable(container, {
+                group: {
+                    name: 'shared',
+                    pull: 'clone',
+                    put: false
+                },
+                animation: 150,
+                sort: false,
+                ghostClass: 'ghost',
+                onClone: function(evt) {
+                    const item = evt.item;
+                    const clone = evt.clone;
+                    clone.classList.add('animate-pulse');
+                    setTimeout(() => {
+                        clone.classList.remove('animate-pulse');
+                    }, 300);
+                }
+            });
+        });
+
+        // Initialize Sortable for program area
+        new Sortable(programArea, {
+            group: 'shared',
+            animation: 150,
+            ghostClass: 'ghost',
+            onAdd: function(evt) {
+                evt.item.classList.add('block-in-program');
+                
+                // Add a remove button to each block in the program
+                const removeBtn = document.createElement('button');
+                removeBtn.innerHTML = '<i class="bi bi-x-circle"></i>';
+                removeBtn.className = 'absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-600';
+                removeBtn.onclick = function(e) {
+                    e.stopPropagation();
+                    evt.item.remove();
+                };
+                evt.item.style.position = 'relative';
+                evt.item.appendChild(removeBtn);
+                
+                // For blocks with parameters, add edit option
+                if (['move', 'repeat', 'wait', 'say', 'think', 'play-note', 'change-size'].includes(evt.item.getAttribute('data-type'))) {
+                    const editBtn = document.createElement('button');
+                    editBtn.innerHTML = '<i class="bi bi-pencil"></i>';
+                    editBtn.className = 'absolute -top-2 left-2 bg-blue-500 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-blue-600';
+                    editBtn.onclick = function(e) {
+                        e.stopPropagation();
+                        editBlockParameter(evt.item);
+                    };
+                    evt.item.appendChild(editBtn);
+                }
+            }
+        });
+
+        const character = document.getElementById('character');
+        const speechBubble = document.getElementById('speech-bubble');
+        const thoughtBubble = document.getElementById('thought-bubble');
+        const canvas = document.getElementById('canvas');
+        let characterX = 50; // percentage
+        let characterY = 50; // percentage
+        let characterRotation = 0; // degrees
+        let characterSize = 100; // percentage
+        let characterHidden = false;
+        let characterColorEffect = 0;
+
+        async function runProgram() {
+            const output = document.getElementById('output');
+            output.innerHTML = '';
+            const blocks = Array.from(document.getElementById('programArea').children);
+            
+            // Reset character position and state
+            characterX = 50;
+            characterY = 50;
+            characterRotation = 0;
+            characterSize = 100;
+            characterHidden = false;
+            characterColorEffect = 0;
+            updateCharacterPosition();
+            
+            // Hide bubbles
+            speechBubble.classList.add('hidden');
+            thoughtBubble.classList.add('hidden');
+            
+            if (blocks.length === 0) {
+                output.innerHTML = '🚀 Your program is empty. Add some blocks to run!';
+                return;
+            }
+            
+            output.innerHTML = '🚀 Starting program...<br>';
+            
+            async function executeBlocks() {
+                for (let block of blocks) {
+                    block.classList.add('run-animation');
+                    await new Promise(resolve => setTimeout(resolve, 300));
+                    block.classList.remove('run-animation');
+                    
+                    const type = block.getAttribute('data-type');
+                    const blockText = block.textContent.trim().replace(/\s+/g, ' ');
+                    
+                    switch(type) {
+                        case 'move':
+                            const stepMatch = blockText.match(/(\d+)\s*steps/);
+                            const steps = stepMatch ? parseInt(stepMatch[1]) : 10;
+                            output.innerHTML += `➡️ Moving forward ${steps} steps...<br>`;
+                            
+                            const radians = characterRotation * Math.PI / 180;
+                            characterX += steps * Math.sin(radians) * 0.5;
+                            characterY -= steps * Math.cos(radians) * 0.5;
+                            
+                            // Keep character within bounds
+                            characterX = Math.min(Math.max(characterX, 10), 90);
+                            characterY = Math.min(Math.max(characterY, 10), 90);
+                            updateCharacterPosition();
+                            break;
+                            
+                        case 'move-to':
+                            output.innerHTML += '🎯 Moving to position X:0 Y:0...<br>';
+                            characterX = 50;
+                            characterY = 50;
+                            updateCharacterPosition();
+                            break;
+                            
+                        case 'turn-right':
+                            const rightDegreeMatch = blockText.match(/(\d+)°/);
+                            const rightDegrees = rightDegreeMatch ? parseInt(rightDegreeMatch[1]) : 90;
+                            output.innerHTML += `↩️ Turning right ${rightDegrees}°...<br>`;
+                            characterRotation += rightDegrees;
+                            updateCharacterPosition();
+                            break;
+                            
+                        case 'turn-left':
+                            const leftDegreeMatch = blockText.match(/(\d+)°/);
+                            const leftDegrees = leftDegreeMatch ? parseInt(leftDegreeMatch[1]) : 90;
+                            output.innerHTML += `↪️ Turning left ${leftDegrees}°...<br>`;
+                            characterRotation -= leftDegrees;
+                            updateCharacterPosition();
+                            break;
+                            
+                        case 'repeat':
+                            const repeatMatch = blockText.match(/(\d+)\s*Times/);
+                            const repeatCount = repeatMatch ? parseInt(repeatMatch[1]) : 3;
+                            output.innerHTML += `🔄 Repeating ${repeatCount} times...<br>`;
+                            output.innerHTML += '  └─ Starting loop...<br>';
+                            
+                            for (let i = 0; i < repeatCount; i++) {
+                                output.innerHTML += `  └─ Iteration ${i+1}...<br>`;
+                                await new Promise(resolve => setTimeout(resolve, 500));
+                            }
+                            output.innerHTML += '  └─ Loop completed<br>';
+                            break;
+                            
+                        case 'forever':
+                            output.innerHTML += '♾️ Starting forever loop (simulating 3 iterations)...<br>';
+                            for (let i = 0; i < 3; i++) {
+                                output.innerHTML += `  └─ Loop iteration ${i+1}...<br>`;
+                                await new Promise(resolve => setTimeout(resolve, 500));
+                            }
+                            output.innerHTML += '  └─ Forever loop simulation completed<br>';
+                            break;
+                            
+                        case 'wait':
+                            const waitMatch = blockText.match(/(\d+(\.\d+)?)\s*second/);
+                            const waitTime = waitMatch ? parseFloat(waitMatch[1]) : 1;
+                            output.innerHTML += `⏱️ Waiting ${waitTime} second${waitTime !== 1 ? 's' : ''}...<br>`;
+                            await new Promise(resolve => setTimeout(resolve, waitTime * 1000));
+                            output.innerHTML += '⏱️ Done waiting<br>';
+                            break;
+                            
+                        case 'if':
+                            output.innerHTML += '⚡ Checking path ahead...<br>';
+                            const pathClear = Math.random() > 0.5;
+                            if (pathClear) {
+                                output.innerHTML += '  └─ Path is clear!<br>';
+                            } else {
+                                output.innerHTML += '  └─ Path is blocked!<br>';
+                            }
+                            break;
+                            
+                        case 'when-start':
+                            output.innerHTML += '🚩 When program starts event triggered<br>';
+                            break;
+                            
+                        case 'when-click':
+                            output.innerHTML += '🖱️ When character clicked event simulated<br>';
+                            break;
+                            
+                        case 'when-key':
+                            output.innerHTML += '⌨️ When space key pressed event simulated<br>';
+                            break;
+                            
+                        case 'play-sound':
+                            output.innerHTML += '🔊 Playing sound "Beep"...<br>';
+                            try {
+                                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                                const oscillator = audioContext.createOscillator();
+                                oscillator.type = 'sine';
+                                oscillator.frequency.setValueAtTime(440, audioContext.currentTime);
+                                oscillator.connect(audioContext.destination);
+                                oscillator.start();
+                                oscillator.stop(audioContext.currentTime + 0.3);
+                            } catch (e) {
+                                console.log('Audio not supported or blocked');
+                            }
+                            break;
+                            
+                        case 'play-note':
+                            const noteMatch = blockText.match(/(\d+)\s*for\s*(\d+(\.\d+)?)/);
+                            const note = noteMatch ? parseInt(noteMatch[1]) : 60;
+                            const duration = noteMatch ? parseFloat(noteMatch[2]) : 0.5;
+                            output.innerHTML += `🎵 Playing note ${note} for ${duration}s...<br>`;
+                            
+                            try {
+                                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                                const oscillator = audioContext.createOscillator();
+                                oscillator.type = 'sine';
+                                // MIDI note to frequency conversion
+                                const frequency = 440 * Math.pow(2, (note - 69) / 12);
+                                oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+                                
+                                const gainNode = audioContext.createGain();
+                                gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                                
+                                oscillator.connect(gainNode);
+                                gainNode.connect(audioContext.destination);
+                                
+                                oscillator.start();
+                                oscillator.stop(audioContext.currentTime + duration);
+                            } catch (e) {
+                                console.log('Audio not supported or blocked');
+                            }
+                            
+                            await new Promise(resolve => setTimeout(resolve, duration * 1000));
+                            break;
+                            
+                        case 'stop-sounds':
+                            output.innerHTML += '🔇 Stopping all sounds...<br>';
+                            break;
+                            
+                        case 'say':
+                            const sayMatch = blockText.match(/"([^"]+)"/);
+                            const sayText = sayMatch ? sayMatch[1] : "Hello!";
+                            
+                            const sayTimeMatch = blockText.match(/for\s*(\d+(\.\d+)?)/);
+                            const sayTime = sayTimeMatch ? parseFloat(sayTimeMatch[1]) : 2;
+                            
+                            output.innerHTML += `💬 Saying "${sayText}" for ${sayTime}s...<br>`;
+                            speechBubble.classList.remove('hidden');
+                            speechBubble.querySelector('div').textContent = sayText;
+                            
+                            // Position the speech bubble above the character
+                            speechBubble.style.left = characterX + '%';
+                            speechBubble.style.top = (characterY - 20) + '%';
+                            
+                            await new Promise(resolve => setTimeout(resolve, sayTime * 1000));
+                            speechBubble.classList.add('hidden');
+                            break;
+                            
+                        case 'think':
+                            const thinkMatch = blockText.match(/"([^"]+)"/);
+                            const thinkText = thinkMatch ? thinkMatch[1] : "Hmm...";
+                            
+                            const thinkTimeMatch = blockText.match(/for\s*(\d+(\.\d+)?)/);
+                            const thinkTime = thinkTimeMatch ? parseFloat(thinkTimeMatch[1]) : 2;
+                            
+                            output.innerHTML += `💭 Thinking "${thinkText}" for ${thinkTime}s...<br>`;
+                            thoughtBubble.classList.remove('hidden');
+                            thoughtBubble.querySelector('div').textContent = thinkText;
+                            
+                            // Position the thought bubble above the character
+                            thoughtBubble.style.left = characterX + '%';
+                            thoughtBubble.style.top = (characterY - 20) + '%';
+                            
+                            await new Promise(resolve => setTimeout(resolve, thinkTime * 1000));
+                            thoughtBubble.classList.add('hidden');
+                            break;
+                            
+                        case 'change-bg':
+                            const bgMatch = blockText.match(/"([^"]+)"/);
+                            const bgName = bgMatch ? bgMatch[1].toLowerCase() : "forest";
+                            
+                            output.innerHTML += `🖼️ Changing background to "${bgName}"...<br>`;
+                            
+                            let bgUrl = "";
+                            if (bgName.includes("forest")) {
+                                bgUrl = "https://images.unsplash.com/photo-1448375240586-882707db888b?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=1170&q=80";
+                            } else if (bgName.includes("ocean")) {
+                                bgUrl = "https://images.unsplash.com/photo-1518837695005-2083093ee35b?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=1170&q=80";
+                            } else {
+                                bgUrl = "https://images.unsplash.com/photo-1562907550-096d3bf9b25c?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=2070&q=80";
+                            }
+                            
+                            canvas.style.backgroundImage = `url('${bgUrl}')`;
+                            break;
+                            
+                        case 'hide':
+                            output.innerHTML += '👻 Hiding character...<br>';
+                            characterHidden = true;
+                            character.style.opacity = 0;
+                            break;
+                            
+                        case 'show':
+                            output.innerHTML += '👀 Showing character...<br>';
+                            characterHidden = false;
+                            character.style.opacity = 1;
+                            break;
+                            
+                        case 'change-size':
+                            const sizeMatch = blockText.match(/by\s*(-?\d+)/);
+                            const sizeChange = sizeMatch ? parseInt(sizeMatch[1]) : 10;
+                            
+                            output.innerHTML += `📏 Changing size by ${sizeChange}%...<br>`;
+                            characterSize += sizeChange;
+                            characterSize = Math.max(10, Math.min(characterSize, 200)); // Limit size range
+                            character.style.width = `${characterSize * 0.16}rem`;
+                            character.style.height = `${characterSize * 0.16}rem`;
+                            break;
+                            
+                        case 'change-color':
+                            output.innerHTML += '🎨 Changing color effect...<br>';
+                            characterColorEffect = (characterColorEffect + 1) % 5;
+                            
+                            switch(characterColorEffect) {
+                                case 0:
+                                    character.style.filter = 'none';
+                                    break;
+                                case 1:
+                                    character.style.filter = 'hue-rotate(90deg)';
+                                    break;
+                                case 2:
+                                    character.style.filter = 'hue-rotate(180deg)';
+                                    break;
+                                case 3:
+                                    character.style.filter = 'sepia(0.8)';
+                                    break;
+                                case 4:
+                                    character.style.filter = 'grayscale(0.8)';
+                                    break;
+                            }
+                            break;
+                    }
+                    
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                }
+                output.innerHTML += '✅ Program completed!<br>';
+            }
+            
+            try {
+                await executeBlocks();
+            } catch (error) {
+                output.innerHTML += `❌ Error: ${error.message}<br>`;
+            }
+        }
+
+        function updateCharacterPosition() {
+            character.style.left = characterX + '%';
+            character.style.top = characterY + '%';
+            character.style.transform = `translate(-50%, -50%) rotate(${characterRotation}deg)`;
+            
+            // Update speech/thought bubble positions if visible
+            if (!speechBubble.classList.contains('hidden')) {
+                speechBubble.style.left = characterX + '%';
+                speechBubble.style.top = (characterY - 20) + '%';
+            }
+            
+            if (!thoughtBubble.classList.contains('hidden')) {
+                thoughtBubble.style.left = characterX + '%';
+                thoughtBubble.style.top = (characterY - 20) + '%';
+            }
+        }
+
+        function clearProgram() {
+            if (confirm('Are you sure you want to clear your program?')) {
+                document.getElementById('programArea').innerHTML = '';
+                document.getElementById('output').innerHTML = 'Program cleared!';
+                // Reset character
+                characterX = 50;
+                characterY = 50;
+                characterRotation = 0;
+                characterSize = 100;
+                character.style.width = '';
+                character.style.height = '';
+                character.style.filter = 'none';
+                character.style.opacity = 1;
+                updateCharacterPosition();
+                // Reset speech and thought bubbles
+                speechBubble.classList.add('hidden');
+                thoughtBubble.classList.add('hidden');
+                // Reset background
+                canvas.style.backgroundImage = "url('https://images.unsplash.com/photo-1562907550-096d3bf9b25c?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=2070&q=80')";
+            }
+        }
+
+        function editBlockParameter(block) {
+            const type = block.getAttribute('data-type');
+            let currentText = block.textContent.trim().replace(/\s+/g, ' ');
+            let newValue;
+            
+            switch(type) {
+                case 'move':
+                    const stepsMatch = currentText.match(/Forward\s+(\d+)/);
+                    const currentSteps = stepsMatch ? parseInt(stepsMatch[1]) : 10;
+                    newValue = prompt('Enter number of steps:', currentSteps);
+                    if (newValue !== null) {
+                        const numSteps = parseInt(newValue);
+                        if (!isNaN(numSteps) && numSteps > 0) {
+                            block.childNodes[0].nodeValue = `Move Forward ${numSteps} steps`;
+                        }
+                    }
+                    break;
+                    
+                case 'repeat':
+                    const repeatMatch = currentText.match(/Repeat\s+(\d+)/);
+                    const currentRepeat = repeatMatch ? parseInt(repeatMatch[1]) : 3;
+                    newValue = prompt('Enter number of times to repeat:', currentRepeat);
+                    if (newValue !== null) {
+                        const numTimes = parseInt(newValue);
+                        if (!isNaN(numTimes) && numTimes > 0) {
+                            block.childNodes[0].nodeValue = `Repeat ${numTimes} Times`;
+                        }
+                    }
+                    break;
+                    
+                case 'wait':
+                    const waitMatch = currentText.match(/Wait\s+(\d+(\.\d+)?)/);
+                    const currentWait = waitMatch ? parseFloat(waitMatch[1]) : 1;
+                    newValue = prompt('Enter wait time in seconds:', currentWait);
+                    if (newValue !== null) {
+                        const waitTime = parseFloat(newValue);
+                        if (!isNaN(waitTime) && waitTime > 0) {
+                            block.childNodes[0].nodeValue = `Wait ${waitTime} second${waitTime !== 1 ? 's' : ''}`;
+                        }
+                    }
+                    break;
+                    
+                case 'say':
+                    const sayMatch = currentText.match(/"([^"]+)"/);
+                    const currentSay = sayMatch ? sayMatch[1] : "Hello!";
+                    newValue = prompt('Enter what to say:', currentSay);
+                    if (newValue !== null && newValue.trim() !== '') {
+                        block.childNodes[0].nodeValue = `Say "${newValue}" for 2s`;
+                    }
+                    break;
+                    
+                case 'think':
+                    const thinkMatch = currentText.match(/"([^"]+)"/);
+                    const currentThink = thinkMatch ? thinkMatch[1] : "Hmm...";
+                    newValue = prompt('Enter what to think:', currentThink);
+                    if (newValue !== null && newValue.trim() !== '') {
+                        block.childNodes[0].nodeValue = `Think "${newValue}" for 2s`;
+                    }
+                    break;
+                    
+                case 'play-note':
+                    const noteMatch = currentText.match(/Note\s+(\d+)/);
+                    const currentNote = noteMatch ? parseInt(noteMatch[1]) : 60;
+                    newValue = prompt('Enter MIDI note (0-127):', currentNote);
+                    if (newValue !== null) {
+                        const noteNumber = parseInt(newValue);
+                        if (!isNaN(noteNumber) && noteNumber >= 0 && noteNumber <= 127) {
+                            block.childNodes[0].nodeValue = `Play Note ${noteNumber} for 0.5s`;
+                        }
+                    }
+                    break;
+                    
+                case 'change-size':
+                    const sizeMatch = currentText.match(/Size\s+by\s+(-?\d+)/);
+                    const currentSize = sizeMatch ? parseInt(sizeMatch[1]) : 10;
+                    newValue = prompt('Enter size change amount (can be negative):', currentSize);
+                    if (newValue !== null) {
+                        const sizeChange = parseInt(newValue);
+                        if (!isNaN(sizeChange)) {
+                            block.childNodes[0].nodeValue = `Change Size by ${sizeChange}`;
+                        }
+                    }
+                    break;
+            }
+        }
+
+        // Save and load functionality
+        document.getElementById('save-btn').addEventListener('click', function() {
+            const programArea = document.getElementById('programArea');
+            const blocks = Array.from(programArea.children).map(block => {
+                return {
+                    type: block.getAttribute('data-type'),
+                    text: block.innerText.trim()
+                };
+            });
+            
+            const projectName = prompt('Enter a name for your project:');
+            if (projectName) {
+                localStorage.setItem(`kidcode_${projectName}`, JSON.stringify(blocks));
+                alert(`Project "${projectName}" saved!`);
+            }
+        });
+
+        document.getElementById('load-btn').addEventListener('click', function() {
+            // Get all saved projects
+            const projects = [];
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key.startsWith('kidcode_') && key !== 'kidcode_visited') {
+                    projects.push(key.replace('kidcode_', ''));
+                }
+            }
+            
+            if (projects.length === 0) {
+                alert('No saved projects found!');
+                return;
+            }
+            
+            const projectName = prompt(`Enter the name of the project to load. Available projects: ${projects.join(', ')}`);
+            if (projectName) {
+                const savedBlocks = localStorage.getItem(`kidcode_${projectName}`);
+                if (savedBlocks) {
+                    const blocks = JSON.parse(savedBlocks);
+                    const programArea = document.getElementById('programArea');
+                    programArea.innerHTML = '';
+                    
+                    blocks.forEach(blockData => {
+                        // Create block element
+                        createAndAddBlock(blockData, programArea);
+                    });
+                    
+                    alert(`Project "${projectName}" loaded!`);
+                } else {
+                    alert(`Project "${projectName}" not found!`);
+                }
+            }
+        });
+
+        function createAndAddBlock(blockData, programArea) {
+            const blockElement = document.createElement('div');
+            blockElement.className = 'block block-in-program';
+            blockElement.setAttribute('data-type', blockData.type);
+            
+            // Set different background colors based on block type
+            if (['move', 'turn-right', 'turn-left', 'move-to'].includes(blockData.type)) {
+                blockElement.classList.add('bg-purple-500', 'text-white', 'p-3', 'rounded-lg');
+            } else if (['repeat', 'if', 'forever', 'wait'].includes(blockData.type)) {
+                blockElement.classList.add('bg-blue-500', 'text-white', 'p-3', 'rounded-lg');
+            } else if (['when-start', 'when-click', 'when-key'].includes(blockData.type)) {
+                blockElement.classList.add('bg-yellow-500', 'text-white', 'p-3', 'rounded-lg');
+            } else if (['play-sound', 'play-note', 'stop-sounds'].includes(blockData.type)) {
+                blockElement.classList.add('bg-green-500', 'text-white', 'p-3', 'rounded-lg');
+            } else if (['say', 'think', 'change-bg'].includes(blockData.type)) {
+                blockElement.classList.add('bg-red-500', 'text-white', 'p-3', 'rounded-lg');
+            } else if (['hide', 'show', 'change-size', 'change-color'].includes(blockData.type)) {
+                blockElement.classList.add('bg-pink-500', 'text-white', 'p-3', 'rounded-lg');
+            } else {
+                blockElement.classList.add('bg-gray-500', 'text-white', 'p-3', 'rounded-lg');
+            }
+            
+            blockElement.textContent = blockData.text;
+            blockElement.style.position = 'relative';
+            
+            // Add remove button
+            const removeBtn = document.createElement('button');
+            removeBtn.innerHTML = '<i class="bi bi-x-circle"></i>';
+            removeBtn.className = 'absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-600';
+            removeBtn.onclick = function(e) {
+                e.stopPropagation();
+                blockElement.remove();
+            };
+            blockElement.appendChild(removeBtn);
+            
+            // For blocks with parameters, add edit option
+            if (['move', 'repeat', 'wait', 'say', 'think', 'play-note', 'change-size'].includes(blockData.type)) {
+                const editBtn = document.createElement('button');
+                editBtn.innerHTML = '<i class="bi bi-pencil"></i>';
+                editBtn.className = 'absolute -top-2 left-2 bg-blue-500 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-blue-600';
+                editBtn.onclick = function(e) {
+                    e.stopPropagation();
+                    editBlockParameter(blockElement);
+                };
+                blockElement.appendChild(editBtn);
+            }
+            
+            programArea.appendChild(blockElement);
+        }
+
+        // Handle category tabs
+        document.querySelectorAll('.category-tab').forEach(tab => {
+            tab.addEventListener('click', function() {
+                const category = this.getAttribute('data-category');
+                
+                // Update active tab UI
+                document.querySelectorAll('.category-tab').forEach(t => {
+                    t.classList.remove('active');
+                    t.classList.remove('border-purple-500', 'border-blue-500', 'border-yellow-500', 'border-green-500', 'border-red-500', 'border-pink-500');
+                    t.classList.remove('text-purple-700', 'text-blue-700', 'text-yellow-700', 'text-green-700', 'text-red-700', 'text-pink-700');
+                    t.classList.add('border-transparent', 'text-gray-600');
+                });
+                
+                this.classList.add('active');
+                
+                // Apply colors based on category
+                switch(category) {
+                    case 'motion':
+                        this.classList.add('border-purple-500', 'text-purple-700');
+                        break;
+                    case 'control':
+                        this.classList.add('border-blue-500', 'text-blue-700');
+                        break;
+                    case 'events':
+                        this.classList.add('border-yellow-500', 'text-yellow-700');
+                        break;
+                    case 'sound':
+                        this.classList.add('border-green-500', 'text-green-700');
+                        break;
+                    case 'storytelling':
+                        this.classList.add('border-red-500', 'text-red-700');
+                        break;
+                    case 'looks':
+                        this.classList.add('border-pink-500', 'text-pink-700');
+                        break;
+                }
+                
+                // Show relevant block palette and hide others
+                document.querySelectorAll('[id$="Blocks"], #blocksPalette').forEach(palette => {
+                    if (palette.getAttribute('data-category') === category) {
+                        palette.classList.remove('hidden');
+                    } else {
+                        palette.classList.add('hidden');
+                    }
+                });
+            });
+        });
+
+        // Character selection
+        document.querySelectorAll('.sprite-option').forEach(sprite => {
+            sprite.addEventListener('click', function() {
+                document.querySelectorAll('.sprite-option').forEach(s => {
+                    s.classList.remove('selected');
+                });
+                this.classList.add('selected');
+                
+                const spriteType = this.getAttribute('data-sprite');
+                character.src = this.src;
+                
+                // Update output log
+                const output = document.getElementById('output');
+                output.innerHTML += `🧙‍♂️ Changed character to ${spriteType}<br>`;
+            });
+        });
+
+        // Background selection
+        document.querySelectorAll('.bg-option').forEach(bg => {
+            bg.addEventListener('click', function() {
+                document.querySelectorAll('.bg-option').forEach(b => {
+                    b.classList.remove('selected');
+                });
+                this.classList.add('selected');
+                
+                const bgType = this.getAttribute('data-bg');
+                canvas.style.backgroundImage = `url('${this.querySelector('img').src}')`;
+                
+                // Update output log
+                const output = document.getElementById('output');
+                output.innerHTML += `🖼️ Changed background to ${bgType}<br>`;
+            });
+        });
+
+        // Make blocks draggable on mobile
+        document.querySelectorAll('.block').forEach(block => {
+            block.addEventListener('touchstart', function(e) {
+                e.preventDefault();
+            }, { passive: false });
+        });
+        
+        // Show help modal on button click or first visit
+        document.getElementById('help-btn').addEventListener('click', function() {
+            document.getElementById('helpModal').classList.remove('hidden');
+        });
+        
+        if (!localStorage.getItem('kidcode_visited')) {
+            document.getElementById('helpModal').classList.remove('hidden');
+            localStorage.setItem('kidcode_visited', 'true');
+        }
+        
+        document.getElementById('closeHelp').addEventListener('click', function() {
+            document.getElementById('helpModal').classList.add('hidden');
+        });
+        
+        document.getElementById('gotIt').addEventListener('click', function() {
+            document.getElementById('helpModal').classList.add('hidden');
+        });
+    </script>
+<script>document.body.addEventListener('wheel', e => { if (!e.ctrlKey) return; e.preventDefault(); return }, { passive: false })</script>
+	</body>
+</html>
